@@ -1,32 +1,23 @@
-// Find all our documentation at https://docs.near.org
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::env::panic_str;
-use near_sdk::{log, near};
-use near_sdk::require;
-use near_sdk::serde::{Serialize,Deserialize};
-use near_sdk::AccountId;
-use near_sdk::Balance;
-use near_sdk::Promise;
-use near_sdk::{env, near_bindgen};
-use std::collections::{HashMap, HashSet};
-use std::hash::BuildHasher;
+use near_sdk::{env,log ,near, require,near_bindgen, AccountId, NearToken, PanicOnDefault, Promise};
+use near_sdk::store::{IterableSet,LookupSet,Vector,UnorderedSet,UnorderedMap};
+// use serde_json::json
 
 pub mod internal;
+pub mod utils;
+pub use crate::utils::*;
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Address{
-    address: String,
-    country: String,
-    state_or_province: String,
-    city: String
+#[near(serializers = [json, borsh])]
+#[derive(Clone,PartialEq)]
+pub enum AppointmentStatus {
+    Pending,
+    Completed,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct PatientInput {
+    id:u32,
     title: String,
     first_name: String,
     last_name: String,
@@ -43,11 +34,10 @@ pub struct PatientInput {
     message: String,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Patient {
-    id: u64,
+    id: u32,
     title: String,
     first_name: String,
     last_name: String,
@@ -57,7 +47,7 @@ pub struct Patient {
     email: String,
     dob: u32,
     city: String,
-    address: String,
+    address:String,
     doctor: String,
     profile_pic: String,
     account_id: AccountId,
@@ -66,9 +56,7 @@ pub struct Patient {
     bought_medicine: Vec<i32>,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
 pub struct DoctorInput {
     title: String,
     first_name: String,
@@ -83,18 +71,16 @@ pub struct DoctorInput {
     end_year: u32,
     specialization: String,
     registration_id: String,
-    college_address: Address,
-    account_id: String,
+    college_address: String,
     profile_pic: String,
-    address: AccountId,
+    account_id: AccountId,
     bio: String,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Doctor {
-    id: u64,
+    id: u32,
     title: String,
     first_name: String,
     last_name: String,
@@ -108,197 +94,209 @@ pub struct Doctor {
     end_year: u32,
     specialization: String,
     registration_id: String,
-    college_address: Address,
-    account_id: String,
+    college_address: String,
+    account_id: AccountId,
     profile_pic: String,
-    address: AccountId,
     bio: String,
     appointment_counts: i32,
     successful_treaments: i32,
     is_approved: bool,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Medicine {
-    id: u64,
+    id: u32,
     doctor_id: u32,
     name: String,
     brand: String,
     manufacturer: String,
     manufacturing_date: String,
-    expiry_date: String
+    expiry_date: String,
     company_email: String,
-    discount: i32,
-    manufacturer_address: Address,
-    price: u64,
-    quantity: u64,
-    current_location: Address,
+    discount: u128,
+    manufacturer_address: String,
+    price: u128,
+    quantity: u128,
+    current_location: String,
     phone_no: u64,
     image: String,
     description: String,
     availability: bool,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Prescription {
-    id: u64,
-    medicine_id: u64,
-    patient_id: u64,
-    doctor_id: u64,
+    id: u32,
+    medicine_id: u32,
+    patient_id: u32,
+    doctor_id: u32,
     date: u64,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Appointment {
-    id: u64,
-    patient_id: u64,
-    doctor_id: u64,
+    id: u32,
+    patient_id: u32,
+    doctor_id: u32,
     from: String,
     to: String,
     appointment_date: String,
     condition: String,
+    status: AppointmentStatus,
     message: String,
     is_open:bool,
 }
 
-
-//define the contract structure
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct Contract {
-    owner: AccountId,
-    admins: UnorderedSet<AccountId>,
-    patients: Vector<Patient>,
-    doctors: Vector<Doctor>,
-    drugs: Vector<Medicine>,
-    prescriptions: Vector<Prescription>,
-    appointments: Vector<Appointment>,
-    notifications: Vector<Notification>,
-}
-
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
 pub struct Message{
     account_id: AccountId,
     timestamp: u64,
     message: String,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Friends {
-    account_id: AccountId,
-}
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Order {
-     medicine_id: u64,
-     price: u64,
+     medicine_id: u32,
+     price: u128,
      payment_amount: u64,
-     quantity: i32,
+     quantity: u128,
      patient_id: u64,
      date: u64,
 }
 
-#[near_bindgen]
-#[derive(Serialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Notification {
-    id: u64,
     account_id: AccountId,
     message: String,
     timestamp: u64,
-    category: String,
 }
 
-//Default state to use if no initialize methods called
-//Define the default, which automatically initializesthe contract
-impl Default for Contract{
+#[near(contract_state)]
+// #[derive(Default, BorshDeserialize, BorshSerialize)]
+pub struct Contract {
+    owner: AccountId,
+    users: IterableSet<AccountId>,
+    patients: Vector<Patient>,
+    no_of_patients: u128,
+    doctors: Vector<Doctor>,
+    no_of_doctors: u128,
+    drugs: Vector<Medicine>,
+    no_of_drugs: u128,
+    prescriptions: Vector<Prescription>,
+    no_of_prescriptions: u128,
+    appointments: Vector<Appointment>,
+    no_of_appointments: u128,
+    notifications: Vector<Notification>,
+    no_of_notifications: u128,
+    orders: Vector<Order>,
+    appointment_fee: u128,
+    registration_fee: u128,
+}
+
+// Implement the default method for Contract, initializing all collections
+impl Default for Contract {
     fn default() -> Self {
-        owner: "owner_testnet_url".parse().unwrap(),
-        admins: UnorderedSet::new(b"s"),
-        patients: Vector::new(b"a"),
-        doctors: Vector::new(b"b"),
-        drugs: Vector::new(b"c"),
-        prescriptions: Vector::new(b"d"),
-        appointments: Vector::new(b"e"),
-        notifications: Vector::new(b"k")
+        Self {
+            owner: "medinear.testnet".parse().unwrap(),
+            users: IterableSet::new(b"s"),
+            patients: Vector::new(b"p"),
+            no_of_patients: 0,
+            doctors: Vector::new(b"d"),
+            no_of_doctors: 0,
+            drugs: Vector::new(b"h"),
+            no_of_drugs: 0,
+            prescriptions: Vector::new(b"p"),
+            no_of_prescriptions: 0,
+            appointments: Vector::new(b"e"),
+            no_of_appointments: 0,
+            notifications: Vector::new(b"k"),
+            no_of_notifications: 0,
+            orders: Vector::new(b"o"),
+            appointment_fee: 42_000_000_000,
+            registration_fee:42_000_000_000,
+        }
     }
 }
 
-//Implement the contract structure
-#[near_bindgen]
+#[near]
 impl Contract {
     #[init]
-    pub fn init(owner: AccountId,admins: Option<Vec<AccountId>> ) -> Self {
+    pub fn init(owner: AccountId,users: Option<Vec<AccountId>>) -> Self {
         assert!(!env::state_exists(),"Already initialized");
 
         Self{
             owner,
-            admins: account_vec_to_set(
-                if admins.is_some() {
-                    admins.unwrap()
+            users: account_vec_to_set(
+                if users.is_some() {
+                    users.unwrap()
                 } else {
                     vec![]
                 },
                 b"s",
-            )
-            doctors: Vector::new();
-            appointment_counter: 0,
-            prescription_counter: 0,
+            ),
+            patients: Vector::new(b"p"),
+            no_of_patients: 0,
+            doctors: Vector::new(b"d"),
+            no_of_doctors: 0,
+            drugs: Vector::new(b"h"),
+            no_of_drugs: 0,
+            prescriptions: Vector::new(b"p"),
+            no_of_prescriptions: 0,
+            appointments: Vector::new(b"e"),
+            no_of_appointments: 0,
+            notifications: Vector::new(b"k"),
+            no_of_notifications: 0,
+            orders: Vector::new(b"o"),
+            appointment_fee: 42_000_000_000,
+            registration_fee:42_000_000_000,
         }
     }
 
-    pub fn add_notification(&mut self, user_address: AccountId, message: String, category_type: String) {
+    pub fn add_notification(&mut self, user_address: AccountId, message: String, ) {
         let timestamp = env::block_timestamp();
 
-        let mut user_notifications = self.notifications.get(&user_address).unwrap_or_else(Vec::new);
-
-        let new_notification = Notification {
-            id: user_notifications.len() as u64,
-            user_address: user_address.clone(),
-            message,
-            timestamp,
-            category_type,
+        let notification = Notification {
+            account_id: user_address.clone(),
+            message: message,
+            timestamp: timestamp, 
         };
 
-        user_notifications.push(new_notification);
+        // Store the notification in the vector
+        self.notifications.push(notification);
 
-        self.notifications.insert(&user_address, &user_notifications);
-
-        env::log_str(&format!("Notification sent to {} at {}", user_address, timestamp));
+        env::log_str(&format!("{} {} {}", user_address,"Notification sent to {} at {}", timestamp));
     }
 
 
-    pub fn get_notifications(&self) -> Vec<Notification>{
-        return self.notifications.to_vec();
-    }
+    // pub fn get_notifications(&self) -> Vec<Notification>{
+    //     return self.notifications
+    //                 .iter()  // Iterate over references to `Prescription`
+    //                 .cloned() // Clone the actual `Prescription`, not just the reference
+    //                 .collect() /
+    //    }
 
     pub fn add_medicine(
-        &self mut,
-        id: u64,
-        doctor: &doctor_id,
+        &mut self,
+        id: u32,
+        doctor_id: u32,
         name: String,
         brand: String,
         manufacturer: String,
-        manufacturing_date: u64,
-        expiry_date: u64,
+        manufacturing_date: String,
+        expiry_date: String,
         company_email: String,
-        discount: i32,
+        discount: u128,
         manufacturer_address: String,
-        price: i32,
-        quantity: i32,
-        current_location: Address,
+        price: u128,
+        quantity: u128,
+        current_location: String,
         phone_no: u64,
         image: String,
         description: String,
@@ -308,37 +306,39 @@ impl Contract {
             "Only the  admins can call this method"
         );
         let medicine = Medicine {
-            id: 
-            ipfs_url,
-            price,
-            quantity,
-            discount,
-            location,
-            availability
+            id: id.clone(),
+            doctor_id: doctor_id,
+            name: name,
+            brand: brand,
+            manufacturer: manufacturer,
+            manufacturing_date: manufacturing_date,
+            expiry_date: expiry_date,
+            company_email: company_email,
+            discount: discount,
+            manufacturer_address: manufacturer_address,
+            price: price,
+            quantity: quantity,
+            current_location: current_location,
+            phone_no: phone_no,
+            image: image,
+            description: description,
+            availability: true,
         };
 
-        self.drugs.insert(medicine);
+        self.drugs.push(medicine);
+        self.no_of_drugs += 1;
     }
 
     //========== End of Medicine =======
 
     //========== Doctor =========----
-    pub fn add_doctor(
-        &mut self,
-        id: u64,
-        doctor: DoctorInput
-    ) -> Self{
-        !require(
-            !self.doctors.contains_key(id),
-            "Doctor with this ID Already exists!"
-        );
+    pub fn add_doctor(&mut self,id: u32,doctor: DoctorInput) {
 
-
-        self doctor = Doctor {
+        let doctor = Doctor {
             id: id.clone(),
             title:doctor.title,
             first_name: doctor.first_name,
-            last_name: doctor.last_name
+            last_name: doctor.last_name,
             gender: doctor.gender,
             designation: doctor.designation,
             last_work: doctor.last_work,
@@ -358,79 +358,94 @@ impl Contract {
             is_approved: false,
         };
 
-        self.doctors.insert(id.clone(),doctor);
+        self.doctors.push(doctor);
+        self.no_of_doctors += 1;
     }
 
-    pub fn approve_doctor(&mut self, doctor_id: u64) -> bool {
-         //only the admin is required to invoke this function
-        if let Some(mut doctor) = self.doctors.get(&doctor_id) {
-            doctor.is_approved = true;
-            self.doctors.insert(&doctor_id, &doctor);
-            true
-        } else {
-            false
-        }
+    pub fn approve_doctor(&mut self, id: u32) {
+        assert!(
+            self.is_admin(),
+            "Only the admins can call this method"
+        );
+    
+        let mut doctor:Doctor = self.doctors.get(id).expect("Doctor not found").clone();
+    
+        doctor.is_approved = true;
+    
+        self.doctors.push(doctor.clone());
+    
+        env::log_str(&format!("Doctor with ID {} has been approved", id));
+    
+        self.add_notification(
+            doctor.account_id.clone(),
+            format!("Your account has been approved. Welcome to the platform!"),
+        );
     }
+    
 
     //Update by the doctor
-    pub fn update_patient_medical(&self mut,patient_id: u64,new_medical_history: String) -> Self{
-        //only the doctor is required to invoke this function
-        //get patient by id and push new medical history
-        //Insert 
+    pub fn update_patient_medical(&mut self,id: u32,new_medical_history: String) {
+        let caller_id = env::predecessor_account_id();
+        assert!(self.is_doctor(caller_id), "Only the assigned doctor can update the medical history.");
+
+        let mut patient: Patient = self.patients.get(id).expect("Doctor not found").clone();
+
+        patient.medical_history.push(new_medical_history);
+
+        self.patients.push(patient.clone());
+
+        env::log_str(
+            format!(
+                "Patient medical history updated by doctor or admin for patient_id: {}",
+                id
+            )
+            .as_str(),
+        );
     }
 
-    pub fn complete_appointment(&mut self, appointment_id: u64) {
-        let mut appointment = self.appointments.get(&appointment_id).expect("Appointment does not exist");
-        let doctor_id = self.get_doctor_id(env::predecessor_account_id());
-        assert_eq!(appointment.doctor_id, doctor_id, "Only the assigned doctor can complete the appointment");
+    pub fn complete_appointment(&mut self, id: u32, patient_id: u32)  {
+        // Retrieve the appointment from storage
+        let mut appointment: Appointment  = self.appointments.get(id)
+            .expect("Appointment not found").clone();
 
-        appointment.is_open = false;
-        self.appointments.insert(&appointment_id, &appointment);
+        // Verify the appointment belongs to the specified patient
+        assert_eq!(appointment.patient_id, patient_id, "Appointment does not belong to the specified patient");
 
-        let mut doctor = self.doctors.get(&env::predecessor_account_id()).unwrap();
-        doctor.successful_treatment_count += 1;
-        self.doctors.insert(&env::predecessor_account_id(), &doctor);
+        // Check if the appointment is already completed
+        assert!(appointment.status == AppointmentStatus::Completed, "Appointment is already completed");
 
-        self.add_notification(env::predecessor_account_id(), "You have successfully completed the appointment".to_string(), "Doctor".to_string());
-        self.add_notification(self.get_patient_account_id(appointment.patient_id), "Your Appointment is successfully completed".to_string(), "Patient".to_string());
-        self.add_notification(self.admin.clone(), "Doctor completed appointment successfully".to_string(), "Admin".to_string());
+        appointment.status = AppointmentStatus::Completed;
     }
 
-   
-    pub fn prescribe_medicine(&mut self, medicine_id: u64, patient_id: u64) -> u64 {
-        let doctor_id = self.get_doctor_id(env::predecessor_account_id());
-        assert!(self.doctors.get(&env::predecessor_account_id()).unwrap().is_approved, "Doctor is not approved");
-
-        let prescription_id = self.prescription_counter;
-        self.prescription_counter += 1;
+    pub fn prescribe_medicine(&mut self,id:u32, medicine_id: u32, patient_id: u32,doctor_id:u32) {
+        let caller_id = env::predecessor_account_id();
+        assert!(self.is_doctor(caller_id), "Only doctors can prescribe medicine.");
 
         let prescription = Prescription {
-            id: prescription_id,
-            medicine_id,
-            patient_id,
-            doctor_id,
+            id: id,
+            medicine_id:medicine_id,
+            patient_id: patient_id,
+            doctor_id: doctor_id,
             date: env::block_timestamp(),
         };
 
-        self.prescriptions.insert(&prescription_id, &prescription);
+        self.prescriptions.push(prescription);
+        self.no_of_prescriptions += 1;
 
-        self.add_notification(env::predecessor_account_id(), "You have successfully prescribed medicine".to_string(), "Doctor".to_string());
-        self.add_notification(self.get_patient_account_id(patient_id), "Doctor prescribed you medicine".to_string(), "Patient".to_string());
-        self.add_notification(self.admin.clone(), "Doctor prescribed medicine successfully".to_string(), "Admin".to_string());
+        self.add_notification(env::predecessor_account_id(), "You have successfully added medicine.".to_string());
+    }
 
-        prescription_id
+    fn is_doctor(&self, account_id: AccountId) -> bool {
+        // Implement logic to verify if the account_id belongs to a doctor
+        self.doctors.iter().any(|doctor| doctor.account_id == account_id)
     }
 
     //======== End Of Doctor
     //===========  Patient
-    pub fn add_patient(&mut self,patient: PatientInput) -> {
-        require!(
-            !self.patients.contains_key(id),
-            "This user already exists in the system"
-        );
+    pub fn add_patient(&mut self,patient: PatientInput) {
 
         let patient = Patient {
-            id: id.clone(),
+            id: patient.id,
             title: patient.title,
             first_name: patient.first_name,
             last_name: patient.last_name,
@@ -444,252 +459,317 @@ impl Contract {
             doctor: patient.doctor,
             profile_pic: patient.profile_pic,
             account_id: patient.account_id,
-            message: patient.message
-            medical_history: patient.condition,
+            message: patient.message,
+            medical_history: vec![],
             bought_medicine: vec![],
         };
 
-        self.patients.insert(id.clone(),patient);
+        self.patients.push(patient);
+        self.no_of_doctors += 1;
 
-        log!("Patient was registered successfully!")
+        log!("Patient was registered successfully!");
     }
 
-    pub fn book_appointment(&mut self, doctor_id: u64, from: String, to: String, appointment_date: String, condition: String, message: String) -> u64 {
-        let patient_id = self.get_patient_id(env::predecessor_account_id());
-        let appointment_id = self.appointment_counter;
-        self.appointment_counter += 1;
+    pub fn book_appointment(&mut self,id:u32,patient_id: u32, doctor_id: u32, from: String, to: String, appointment_date: String, condition: String, message: String) {
 
         let appointment = Appointment {
-            id: appointment_id,
-            patient_id,
-            doctor_id,
-            from,
-            to,
-            appointment_date,
-            condition,
-            message,
+            id: id,
+            patient_id: patient_id,
+            doctor_id: doctor_id,
+            from: from,
+            to: to,
+            appointment_date: appointment_date,
+            condition: condition,
+            status: AppointmentStatus::Pending,
+            message: message,
             is_open: true,
         };
 
-        self.appointments.insert(&appointment_id, &appointment);
+        self.appointments.push(appointment);
+        self.no_of_appointments += 1;
+
         
-        self.add_notification(env::predecessor_account_id(), "You have successfully booked an appointment".to_string(), "Patient".to_string());
-        self.add_notification(self.get_doctor_account_id(doctor_id), "A new appointment has been booked for you".to_string(), "Doctor".to_string());
-        self.add_notification(self.admin.clone(), "A new appointment has been booked".to_string(), "Admin".to_string());
+        self.add_notification(env::predecessor_account_id(), "You have successfully booked an appointment".to_string());
 
-        appointment_id
     }
 
-    pub fn count_available_medicines(&self) -> u64 {
-        self.medicines.values().filter(|m| m.availability && m.quantity > 0).count() as u64
+    #[payable]
+    pub fn buy_medicine(&mut self, medicine_id: u32, quantity: u128, patient_id: u32) -> Promise {
+        // Retrieve the medicine details
+        let medicine = self.get_medicine_by_id(medicine_id).expect("Medicine not found");
+    
+        // Check if the quantity is valid (should be greater than 0)
+        assert!(quantity > 0, "Quantity must be greater than 0.");
+    
+        // Calculate the total price
+        let total_price = medicine.price * quantity as u128;
+    
+        Promise::new(self.owner.clone()).transfer(NearToken::from_yoctonear(total_price.try_into().unwrap()))
     }
-
-    pub fn is_in_stock(&self, medicine_id: u64) -> bool {
-        if let Some(medicine) = self.medicines.get(&medicine_id) {
-            medicine.availability && medicine.quantity > 0
-        } else {
-            false
-        }
-    }
-
-    pub fn buy_medicine(&mut self, medicine_id: u64, quantity: i32, patient_id: u64) -> Promise {
-        let mut medicine = self.medicines.get(&medicine_id).expect("Medicine not found");
-        assert!(medicine.availability, "Medicine is not available");
-        assert!(medicine.quantity >= quantity as u64, "Not enough stock");
-
-        let discounted_price = medicine.price * (100 - medicine.discount as u64) / 100;
-        let total_price = discounted_price * quantity as u64;
-
-        let order = Order {
-            medicine_id,
-            price: discounted_price,
-            payment_amount: total_price,
-            quantity,
-            patient_id,
-            date: env::block_timestamp(),
-        };
-
-        medicine.quantity -= quantity as u64;
-        if medicine.quantity == 0 {
-            medicine.availability = false;
-        }
-
-        self.medicines.insert(&medicine_id, &medicine);
-        
-        let order_id = self.order_counter;
-        self.order_counter += 1;
-        self.orders.insert(&order_id, &order);
-
-        // Transfer the payment to the contract
-        Promise::new(env::current_account_id()).transfer(total_price)
-    }
+    
 
     // End of patient
     // Admin
 
     //Update by Admin only
-    pub fn update_registration_fee() -> Self{
-
+     pub fn update_registration_fee(&mut self, new_fee: u128) {
+        assert!(
+            self.is_admin(),
+            "Only the owner(patient) and admins can call this method"
+        );
+        self.registration_fee = new_fee;
+        env::log_str(&format!("Registration fee updated to {}", new_fee));
     }
 
-    pub fn update_appointment_fee() -> Self{
-
+    // Function to update the appointment fee
+    pub fn update_appointment_fee(&mut self, new_fee: u128) {
+        assert!(
+            self.is_admin(),
+            "Only the owner(patient) and admins can call this method"
+        );
+        self.appointment_fee = new_fee;
+        env::log_str(&format!("Appointment fee updated to {}", new_fee));
     }
 
-    pub fn update_patient_registration_fee() -> Self{
 
-    }
-
-    pub fn update_admin_address() -> Self{
-
+    // Function to update the admin address
+    pub fn update_admin_address(&mut self, new_admin: AccountId) {
+        assert!(
+            self.is_admin(),
+            "Only the owner(patient) and admins can call this method"
+        );
+        self.owner = new_admin.clone();
+        env::log_str(&format!("Admin address updated to {}", new_admin));
     }
 
     //======== End Of Admin
-
     //=========  Get patient data
-    pub fn get_all_patient_orders() -> Self{
+    pub fn get_all_patient_orders(&self) -> Vec<Order> {
+        self.orders
+            .iter()  // Iterate over references to `Order`
+            .cloned() // Clone each `Order` to get owned values
+            .collect() // Collect into a Vec<Order>
+    }
+    
 
+    // Retrieve all prescription details
+    pub fn get_all_prescription_details(&self) -> Vec<Prescription> {
+        self.prescriptions
+            .iter()  // Iterate over references to `Prescription`
+            .cloned() // Clone the actual `Prescription`, not just the reference
+            .collect() // Collect into a Vec<Prescription>
+    }
+    
+
+    pub fn get_all_registered_patients(&self) -> Vec<Patient> {
+        self.patients
+            .iter()     // Iterate over the vector of patients
+            .cloned()   // Clone the Patient objects to return owned values
+            .collect()  // Collect into a Vec<Patient>
+    }
+    
+    pub fn get_patient_id(&self, patient_id: u32) -> Option<Patient> {
+        // Assuming you have a patients collection to look up the patient by ID
+        self.patients.iter().find(|patient| patient.id == patient_id).cloned()
     }
 
-    pub fn get_all_prescription_details() -> Self{
-
-    }
-
-    pub fn get_all_prescribed_medicines() -> Self{
-
-    }
-
-    pub fn get_all_prescribed_medicine_of_patient() -> Self{
-
-    }
-
-    pub fn get_all_registered_patients( &self) -> Vec<Patient>{
-        return self.patients.to_vec();
-    }
-
-    pub fn get_patient_id(
-        &self
-    ) -> Option<Patient>{
-        if let Some(index) = self.patients.iter().position(|patient| patient.id == id) {
-            self.patients.get(index as u64);
-        } else {
-            None;
-        }
-    }
-
-    pub fn get_patient_appointment(&self) -> Vec<Appointment>{
-        let appointments = self
+    pub fn get_patient_appointment(&self, patient_id: u32) -> Vec<Appointment> {
+        let appointments: Vec<Appointment> = self
             .appointments
-            .values() 
-            .filter(|appointment| {
-                appointment.patient_id == patient_id.clone()
-            }) 
-            .cloned() 
-            .collect();
-
+            .iter() // Iterate over the appointments
+            .filter(|appointment| appointment.patient_id == patient_id) // Filter by patient ID
+            .cloned() // Clone the appointment to return ownership
+            .collect(); // Collect the results into a Vec<Appointment>
+    
         appointments
     }
+    
 
-    pub fn get_patient_medical_history(&self) -> Vec<Patient>{
-        !require(
-            !self.patients.contains_key(id),
-            "Doctor with this ID Already exists!"
-        );
-        assert!(
-            self.is_owner_or_admin(),
-            "Only the owner(patient) and admins can call this method"
-        );
-        return self.patients.medical_history;
+    pub fn get_patient_medical_history(&self, patient_id: u32) -> Vec<String> {
+        // Retrieve the patient by ID
+        let patient = self.get_patient_id(patient_id).unwrap(); // Assuming you have this method
+    
+        // Return the patient's medical history (Vec<String>)
+        patient.medical_history.clone() // Clone to return ownership
+    }
+    
+    pub fn get_patient_appointment_history(&self, patient_id: u32) -> Vec<Appointment> {
+        self.appointments.iter()
+            .filter(|appointment| appointment.patient_id == patient_id)
+            .cloned()
+            .collect()
     }
 
-    pub fn get_patient_appointment_history() -> Self{
+    pub fn get_bought_medicine_by_patient(&self, patient_id: u32) -> Vec<Medicine> {
+        let patient = self.get_patient_id(patient_id); // Assuming you have this method
 
-    }
-
-    pub fn get_patient_details() -> Self{
-
-    }
-
-    pub fn get_bought_medicine_by_patient() -> Self{
-
+        // Collect medicines based on the IDs stored in `bought_medicine`
+        patient.unwrap().bought_medicine.iter()
+            .filter_map(|&medicine_id| self.get_medicine_by_id(medicine_id as u32)) // Assuming this method retrieves Medicine by ID
+            .collect()
     }
 
     pub fn get_all_appointments(&self) -> Vec<Appointment>{
-        return self.appointments.to_vec();
+        self.appointments.iter().map(|appointment| appointment.clone()).collect()
     }
 
     // Get doctors data
     pub fn get_all_doctors_data(&self) -> Vec<Doctor>{
-        return self.doctors.to_vec();
+        self.doctors.iter().map(|doctor | doctor.clone()).collect()
     }
 
     pub fn get_approved_doctors(&self) -> Vec<Doctor> {
-        self.doctors.values().filter(|doctor| doctor.is_approved).collect()
+        self.doctors.iter().filter(|doctor| doctor.is_approved).cloned().collect()
     }
 
 
-    pub fn get_most_popular_doctor() -> Vec<Doctor>{
-        let mut most_popular: Vec<Doctor> = Vec::new();
-        let mut highest_popularity = 0;
 
-        // Iterate through the vector of doctors
+    pub fn get_doctor_details(&self, doctor_id: u32) -> Option<Doctor> {
         for doctor in self.doctors.iter() {
-            // Calculate the popularity of the current doctor
-            let popularity = doctor.appointment_counts + doctor.successful_treatments;
-
-            // If the current doctor is more popular, reset the list
-            if popularity > highest_popularity {
-                highest_popularity = popularity;
-                most_popular.clear(); // Clear the previous results
-                most_popular.push(doctor); // Add the new most popular doctor
-            } else if popularity == highest_popularity {
-                // If there's a tie, add the doctor to the list
-                most_popular.push(doctor);
+            if doctor.id == doctor_id {
+                return Some(doctor.clone());
             }
         }
+        None
     }
 
-    pub fn get_doctor_details() -> Self{
 
-    }
+    pub fn get_doctor_appointment_historys(&self, doctor_id: u32) -> Vec<Appointment>{
+        let mut history: Vec<Appointment> = Vec::new(); // Initialize an empty vector for the appointment history
 
-    pub fn get_doctor_id(
-        &self,
-        id: u64,
-    ) -> Option<Doctor>{
-        if let Some(index) = self.doctors.iter().position(|doctor| doctor.id == id) {
-            self.doctors.get(index as u64)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_doctor_appointment_historys(&self, doctor_id: u64) -> Vec<Appointment>{
-        let mut doctor_appointments: Vec<Appointment> = Vec::new();
-
-        // Iterate through the list of appointments
-        for appointment in self.appointments.iter() {
-            // Check if the appointment belongs to the specified doctor
-            if appointment.doctor_id == doctor_id {
-                doctor_appointments.push(appointment);
+        for i in 0..self.appointments.len() {
+            if let Some(appointment) = self.appointments.get(i) {
+                if appointment.doctor_id == doctor_id && !appointment.is_open {
+                    history.push(appointment.clone()); // Add the closed appointment to the history
+                }
             }
         }
-    }
-
-    pub fn get_doctor_appointments(&self, doctor_id: u64) -> Vec<Appointment> {
-        self.appointments.values()
-            .filter(|appointment| appointment.doctor_id == doctor_id)
-            .collect()
+    
+        history 
     }
 
     // Get doctor medicine
-    pub fn get_all_registered_medicines() -> Vec<Medicine>{
-        return self.drugs.to_vec()
+    pub fn get_all_registered_medicines(&self) -> Vec<Medicine>{
+        return self.drugs.iter().cloned().collect()
     }
 
-    pub fn get_medicine_details() -> Self {
-
+    pub fn get_medicine_by_id(&self, medicine_id: u32) -> Option<Medicine> {
+        // Assuming `self.medicines` is a collection (e.g., a vector or map) of medicines
+        self.drugs.iter().find(|&medicine| medicine.id == medicine_id).cloned()
     }
 
-
+   
 }
+
+    // pub fn check_user_exists(&self, pubkey: AccountId) -> bool {
+    //     self.users.get(&pubkey).is_some();
+    // }
+
+    // // Create a new account
+    // pub fn create_account(&mut self, name: String, user_type: String) {
+    //     let caller = env::predecessor_account_id();
+    //     assert!(!self.check_user_exists(caller.clone()), "User already exists");
+    //     assert!(!name.is_empty(), "Username cannot be empty");
+
+    //     let user = User {
+    //         name: name.clone(),
+    //         user_type,
+    //         friend_list: Vector::new(b"f"),
+    //     };
+
+    //     self.users.insert(&caller, &user);
+    //     self.all_users.push(&user);
+    // }
+
+    // // Get user information
+    // pub fn get_username_type(&self, pubkey: AccountId) -> Option<User> {
+    //     self.users.get(&pubkey);
+    // }
+
+    // // Add a friend
+    // pub fn add_friend(&mut self, friend_key: AccountId, my_address: AccountId, name: String) {
+    //     assert!(self.check_user_exists(my_address.clone()), "Create an account first");
+    //     assert!(self.check_user_exists(friend_key.clone()), "User is not registered");
+    //     assert!(my_address != friend_key, "Users cannot add themselves as friends");
+
+    //     if !self.check_already_friends(my_address.clone(), friend_key.clone()) {
+    //         self._add_friend(my_address.clone(), friend_key.clone(), name.clone());
+    //         self._add_friend(friend_key, my_address, self.users.get(&my_address).unwrap().name.clone());
+    //     }
+    // }
+
+    // // Check if users are already friends
+    // fn check_already_friends(&self, pubkey1: AccountId, pubkey2: AccountId) -> bool {
+    //     if let Some(user1) = self.users.get(&pubkey1) {
+    //         for friend in user1.friend_list.iter() {
+    //             if friend.pubkey == pubkey2 {
+    //                 return true;
+    //             }
+    //         }
+    //     }
+    //     false
+    // }
+
+    // // Internal function to add a friend
+    // fn _add_friend(&mut self, me: AccountId, friend_key: AccountId, name: String) {
+    //     let mut user = self.users.get(&me).unwrap();
+    //     let new_friend = Friend { pubkey: friend_key, name };
+    //     user.friend_list.push(&new_friend);
+    //     self.users.insert(&me, &user);
+    // }
+
+    // // Get friend list
+    // pub fn get_my_friend_list(&self, _address: AccountId) -> Vec<Friend> {
+    //     if let Some(user) = self.users.get(&_address) {
+    //         return user.friend_list.to_vec();
+    //     }
+    //     vec![]
+    // }
+
+    // // Get chat code (hash of two public keys)
+    // fn _get_chat_code(pubkey1: AccountId, pubkey2: AccountId) -> (AccountId, AccountId) {
+    //     if pubkey1 < pubkey2 {
+    //         (pubkey1, pubkey2)
+    //     } else {
+    //         (pubkey2, pubkey1)
+    //     }
+    // }
+
+    // // Send message
+    // pub fn send_message(&mut self, friend_key: AccountId, my_address: AccountId, msg: String) {
+    //     assert!(self.check_user_exists(my_address.clone()), "Create an account first");
+    //     assert!(self.check_user_exists(friend_key.clone()), "User is not registered");
+    //     assert!(self.check_already_friends(my_address.clone(), friend_key.clone()), "You are not friend with the given user");
+
+    //     let chat_code = self._get_chat_code(my_address.clone(), friend_key.clone());
+    //     let new_msg = Message {
+    //         sender: my_address.clone(),
+    //         timestamp: env::block_timestamp(),
+    //         content: msg.clone(),
+    //     };
+
+    //     let mut messages = self.all_messages.get(&chat_code).unwrap_or_else(|| Vector::new(b"msg"));
+    //     messages.push(&new_msg);
+    //     self.all_messages.insert(&chat_code, &messages);
+
+    //     // Add notifications (pseudo-code, implement actual notification logic)
+    //     // self.add_notification(my_address.clone(), "You have successfully sent a message", "Message".to_string());
+    //     // self.add_notification(friend_key.clone(), "You have a new message", "Message".to_string());
+    // }
+
+    // // Read messages
+    // pub fn get_read_message(&self, friend_key: AccountId, my_address: AccountId) -> Vec<Message> {
+    //     let chat_code = self._get_chat_code(my_address, friend_key);
+    //     self.all_messages.get(&chat_code).unwrap_or_else(Vec::new)
+    // }
+
+    // // Get all users
+    // pub fn get_all_app_user(&self) -> Vec<User> {
+    //     self.all_users.to_vec();
+    // }
+
+
+// Tests in a separated file (see more here -> http://xion.io/post/code/rust-unit-test-placement.html)
+// #[cfg(test)]
+// #[path = "./tests.rs"]
+// mod tests;
