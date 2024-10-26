@@ -17,15 +17,14 @@ pub enum AppointmentStatus {
 #[near(serializers = [json, borsh])]
 #[derive(Clone)]
 pub struct PatientInput {
-    id:u32,
     title: String,
     first_name: String,
     last_name: String,
     gender: String,
     condition: String,
-    phone: u32,
+    phone: String,
     email: String,
-    dob: u32,
+    dob: String,
     city: String,
     address: String,
     doctor: String,
@@ -43,9 +42,9 @@ pub struct Patient {
     last_name: String,
     gender: String,
     condition: String,
-    phone: u32,
+    phone: String,
     email: String,
-    dob: u32,
+    dob: String,
     city: String,
     address:String,
     doctor: String,
@@ -57,6 +56,7 @@ pub struct Patient {
 }
 
 #[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct DoctorInput {
     title: String,
     first_name: String,
@@ -67,8 +67,8 @@ pub struct DoctorInput {
     email: String,
     college_name: String,
     college_id: String,
-    joining_year: u32,
-    end_year: u32,
+    joining_year: String,
+    end_year: String,
     specialization: String,
     registration_id: String,
     college_address: String,
@@ -90,8 +90,8 @@ pub struct Doctor {
     email: String,
     college_name: String,
     college_id: String,
-    joining_year: u32,
-    end_year: u32,
+    joining_year: String,
+    end_year: String,
     specialization: String,
     registration_id: String,
     college_address: String,
@@ -151,13 +151,13 @@ pub struct Appointment {
 }
 
 #[near(serializers = [json, borsh])]
+#[derive(Clone)]
 pub struct Message{
-    account_id: AccountId,
+    patient_id: AccountId,
+    doctor_id: AccountId,
     timestamp: u64,
     message: String,
 }
-
-
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone)]
@@ -184,18 +184,19 @@ pub struct Contract {
     owner: AccountId,
     users: IterableSet<AccountId>,
     patients: Vector<Patient>,
-    no_of_patients: u128,
+    no_of_patients: u32,
     doctors: Vector<Doctor>,
-    no_of_doctors: u128,
+    no_of_doctors: u32,
     drugs: Vector<Medicine>,
-    no_of_drugs: u128,
+    no_of_drugs: u32,
     prescriptions: Vector<Prescription>,
-    no_of_prescriptions: u128,
+    no_of_prescriptions: u32,
     appointments: Vector<Appointment>,
-    no_of_appointments: u128,
+    no_of_appointments: u32,
     notifications: Vector<Notification>,
-    no_of_notifications: u128,
+    no_of_notifications: u32,
     orders: Vector<Order>,
+    messages: Vector<Message>,
     appointment_fee: u128,
     registration_fee: u128,
 }
@@ -219,6 +220,7 @@ impl Default for Contract {
             notifications: Vector::new(b"k"),
             no_of_notifications: 0,
             orders: Vector::new(b"o"),
+            messages: Vector::new(b"m"),
             appointment_fee: 42_000_000_000,
             registration_fee:42_000_000_000,
         }
@@ -254,6 +256,7 @@ impl Contract {
             notifications: Vector::new(b"k"),
             no_of_notifications: 0,
             orders: Vector::new(b"o"),
+            messages: Vector::new(b"m"),
             appointment_fee: 42_000_000_000,
             registration_fee:42_000_000_000,
         }
@@ -284,7 +287,6 @@ impl Contract {
 
     pub fn add_medicine(
         &mut self,
-        id: u32,
         doctor_id: u32,
         name: String,
         brand: String,
@@ -306,7 +308,7 @@ impl Contract {
             "Only the  admins can call this method"
         );
         let medicine = Medicine {
-            id: id.clone(),
+            id: self.no_of_drugs,
             doctor_id: doctor_id,
             name: name,
             brand: brand,
@@ -332,10 +334,10 @@ impl Contract {
     //========== End of Medicine =======
 
     //========== Doctor =========----
-    pub fn add_doctor(&mut self,id: u32,doctor: DoctorInput) {
+    pub fn add_doctor(&mut self,doctor: DoctorInput) {
 
         let doctor = Doctor {
-            id: id.clone(),
+            id: self.no_of_doctors,
             title:doctor.title,
             first_name: doctor.first_name,
             last_name: doctor.last_name,
@@ -445,7 +447,7 @@ impl Contract {
     pub fn add_patient(&mut self,patient: PatientInput) {
 
         let patient = Patient {
-            id: patient.id,
+            id: self.no_of_patients,
             title: patient.title,
             first_name: patient.first_name,
             last_name: patient.last_name,
@@ -473,7 +475,7 @@ impl Contract {
     pub fn book_appointment(&mut self,id:u32,patient_id: u32, doctor_id: u32, from: String, to: String, appointment_date: String, condition: String, message: String) {
 
         let appointment = Appointment {
-            id: id,
+            id: self.no_of_notifications,
             patient_id: patient_id,
             doctor_id: doctor_id,
             from: from,
@@ -658,115 +660,31 @@ impl Contract {
         self.drugs.iter().find(|&medicine| medicine.id == medicine_id).cloned()
     }
 
+    pub fn send_message(&mut self, recipient: AccountId, message: String) -> Message {
+        let sender = env::predecessor_account_id();
+        let timestamp = env::block_timestamp();
+
+        let new_message = Message {
+            patient_id: if self.is_doctor(sender.clone()) { recipient.clone() } else { sender.clone() },
+            doctor_id: if self.is_doctor(sender.clone()) { sender } else { recipient },
+            timestamp,
+            message,
+        };
+
+        self.messages.push(new_message.clone());
+        new_message
+    }
+
+    pub fn get_messages(&self, patient: AccountId, doctor: AccountId) -> Vec<Message> {
+        self.messages
+            .iter()
+            .filter(|msg| msg.patient_id == patient && msg.doctor_id == doctor)
+            .cloned()
+            .collect()
+    }
+
    
 }
-
-    // pub fn check_user_exists(&self, pubkey: AccountId) -> bool {
-    //     self.users.get(&pubkey).is_some();
-    // }
-
-    // // Create a new account
-    // pub fn create_account(&mut self, name: String, user_type: String) {
-    //     let caller = env::predecessor_account_id();
-    //     assert!(!self.check_user_exists(caller.clone()), "User already exists");
-    //     assert!(!name.is_empty(), "Username cannot be empty");
-
-    //     let user = User {
-    //         name: name.clone(),
-    //         user_type,
-    //         friend_list: Vector::new(b"f"),
-    //     };
-
-    //     self.users.insert(&caller, &user);
-    //     self.all_users.push(&user);
-    // }
-
-    // // Get user information
-    // pub fn get_username_type(&self, pubkey: AccountId) -> Option<User> {
-    //     self.users.get(&pubkey);
-    // }
-
-    // // Add a friend
-    // pub fn add_friend(&mut self, friend_key: AccountId, my_address: AccountId, name: String) {
-    //     assert!(self.check_user_exists(my_address.clone()), "Create an account first");
-    //     assert!(self.check_user_exists(friend_key.clone()), "User is not registered");
-    //     assert!(my_address != friend_key, "Users cannot add themselves as friends");
-
-    //     if !self.check_already_friends(my_address.clone(), friend_key.clone()) {
-    //         self._add_friend(my_address.clone(), friend_key.clone(), name.clone());
-    //         self._add_friend(friend_key, my_address, self.users.get(&my_address).unwrap().name.clone());
-    //     }
-    // }
-
-    // // Check if users are already friends
-    // fn check_already_friends(&self, pubkey1: AccountId, pubkey2: AccountId) -> bool {
-    //     if let Some(user1) = self.users.get(&pubkey1) {
-    //         for friend in user1.friend_list.iter() {
-    //             if friend.pubkey == pubkey2 {
-    //                 return true;
-    //             }
-    //         }
-    //     }
-    //     false
-    // }
-
-    // // Internal function to add a friend
-    // fn _add_friend(&mut self, me: AccountId, friend_key: AccountId, name: String) {
-    //     let mut user = self.users.get(&me).unwrap();
-    //     let new_friend = Friend { pubkey: friend_key, name };
-    //     user.friend_list.push(&new_friend);
-    //     self.users.insert(&me, &user);
-    // }
-
-    // // Get friend list
-    // pub fn get_my_friend_list(&self, _address: AccountId) -> Vec<Friend> {
-    //     if let Some(user) = self.users.get(&_address) {
-    //         return user.friend_list.to_vec();
-    //     }
-    //     vec![]
-    // }
-
-    // // Get chat code (hash of two public keys)
-    // fn _get_chat_code(pubkey1: AccountId, pubkey2: AccountId) -> (AccountId, AccountId) {
-    //     if pubkey1 < pubkey2 {
-    //         (pubkey1, pubkey2)
-    //     } else {
-    //         (pubkey2, pubkey1)
-    //     }
-    // }
-
-    // // Send message
-    // pub fn send_message(&mut self, friend_key: AccountId, my_address: AccountId, msg: String) {
-    //     assert!(self.check_user_exists(my_address.clone()), "Create an account first");
-    //     assert!(self.check_user_exists(friend_key.clone()), "User is not registered");
-    //     assert!(self.check_already_friends(my_address.clone(), friend_key.clone()), "You are not friend with the given user");
-
-    //     let chat_code = self._get_chat_code(my_address.clone(), friend_key.clone());
-    //     let new_msg = Message {
-    //         sender: my_address.clone(),
-    //         timestamp: env::block_timestamp(),
-    //         content: msg.clone(),
-    //     };
-
-    //     let mut messages = self.all_messages.get(&chat_code).unwrap_or_else(|| Vector::new(b"msg"));
-    //     messages.push(&new_msg);
-    //     self.all_messages.insert(&chat_code, &messages);
-
-    //     // Add notifications (pseudo-code, implement actual notification logic)
-    //     // self.add_notification(my_address.clone(), "You have successfully sent a message", "Message".to_string());
-    //     // self.add_notification(friend_key.clone(), "You have a new message", "Message".to_string());
-    // }
-
-    // // Read messages
-    // pub fn get_read_message(&self, friend_key: AccountId, my_address: AccountId) -> Vec<Message> {
-    //     let chat_code = self._get_chat_code(my_address, friend_key);
-    //     self.all_messages.get(&chat_code).unwrap_or_else(Vec::new)
-    // }
-
-    // // Get all users
-    // pub fn get_all_app_user(&self) -> Vec<User> {
-    //     self.all_users.to_vec();
-    // }
 
 
 // Tests in a separated file (see more here -> http://xion.io/post/code/rust-unit-test-placement.html)
